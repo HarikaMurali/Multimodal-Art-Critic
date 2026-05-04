@@ -1,157 +1,121 @@
-# Multimodal Art Critic Chatbot - Execution Guide
+# Multimodal Art Critic Chatbot
 
-## What Has Been Executed Already
+A multimodal art critic that analyzes images and text, generates critiques in different persona voices, and produces a generated image for each analysis. The project provides a FastAPI backend that wraps model calls (image captioning, classification, LLM critique, and text-to-image generation) and a React + Vite frontend for interactive use.
 
-1. Extracted a backend API from the UI logic into `api_server.py`.
-2. Added a full workflow endpoint that supports:
-	 - image or text input
-	 - persona-based critique tone
-	 - prompt control sliders
-	 - generated image output URL
-	 - session turn persistence in `data/sessions/`
-3. Added static serving for generated images from `data/outputs/`.
+## Key Features
+- Single-analysis workflow: accept image or text, produce caption, critique, and a generated image
+- Persona-driven critiques (curator, critic, playful, academic, etc.)
+- Prompt-control sliders (stylization, drama, texture, warmth)
+- Multi-image compare workflow (2–4 images)
+- Session persistence and export (markdown report)
+- Authentication (register/login) with per-session ownership
 
-## Step 1 - Run The API Now
+## Quickstart (Development)
+Prerequisites:
+- Python 3.10+ and virtual environment
+- Node.js 18+ and npm
+- A Hugging Face API token stored in an environment variable `HF_TOKEN`
 
-Use your project virtual environment:
+1. Create and activate a virtual environment
 
 ```powershell
+python -m venv .\venv
 .\venv\Scripts\Activate.ps1
+```
+
+2. Install Python dependencies
+
+```powershell
+pip install -r requirements.txt
+```
+
+3. Set environment variables (example for Windows PowerShell)
+
+```powershell
+$env:HF_TOKEN = "<your-hf-token>"
+copy .env.example .env
+```
+
+4. Start the backend API
+
+```powershell
 python -m uvicorn api_server:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Health check:
+5. Install and run the frontend (from project root)
 
 ```powershell
-curl http://127.0.0.1:8000/api/v1/health
-```
-
-## Step 2 - Test Full Analysis Endpoint
-
-With PowerShell:
-
-```powershell
-curl -Method Post "http://127.0.0.1:8000/api/v1/workflows/full-analysis" `
-	-Form @{ \
-		image=Get-Item "sample.jpg"; \
-		description="What if chess pawns were alive and talking?"; \
-		persona="curator"; \
-		stylization="0.8"; \
-		drama="0.7"; \
-		texture="0.6"; \
-		warmth="0.5" \
-	}
-```
-
-## Step 3 - Session History
-
-From the previous response, copy `session_id`, then:
-
-```powershell
-curl http://127.0.0.1:8000/api/v1/sessions/<session_id>
-```
-
-## Step 4 - Build React Frontend (Next)
-
-Create frontend app:
-
-```powershell
-npm create vite@latest frontend -- --template react-ts
 cd frontend
 npm install
-npm install axios tailwindcss @tailwindcss/vite
-```
-
-Run frontend:
-
-```powershell
-npm run dev
-```
-
-Frontend is now scaffolded in `frontend/` and wired to the API workflow endpoint.
-
-Run it:
-
-```powershell
-cd frontend
 copy .env.example .env.local
 npm run dev
 ```
 
-From the project root (`C:\Chatbot`), you can now also run:
+Open the frontend URL printed by Vite (usually http://localhost:5173).
+
+## API Overview
+Base: `http://127.0.0.1:8000/api/v1`
+
+- GET `/health` — service health
+- POST `/auth/register` — register a user
+- POST `/auth/login` — login -> returns bearer token
+- GET `/auth/me` — get current user
+- POST `/workflows/full-analysis` — single analysis (image or text)
+  - form fields: `image` (file, optional), `description` (string), `persona` (string), `stylization`, `drama`, `texture`, `warmth` (floats 0.0–1.0), `session_id` (optional)
+  - response: `session_id`, `caption`, `analysis` object, `critique`, `generation` object (includes `generated_image_url`)
+- POST `/workflows/compare-analysis` — compare multiple images (2–4)
+- GET `/sessions/{session_id}` — retrieve session
+- GET `/sessions/{session_id}/export` — download markdown export
+
+Authentication: send `Authorization: Bearer <token>` for protected routes.
+
+## Configuration
+Edit `config/settings.py` to change model IDs and model-related settings. Important environment variables:
+- `HF_TOKEN` — Hugging Face API token used by `src/api_clients/hf_client.py`
+
+Outputs and data directories:
+- `data/uploads/` — uploaded files
+- `data/outputs/` — generated images and artifacts (served statically)
+- `data/sessions/` — session JSONL persistence
+
+## Project Structure (selected)
+- `api_server.py` — FastAPI application and endpoints
+- `app.py` — legacy Gradio demo (kept for reference)
+- `src/api_clients/hf_client.py` — Hugging Face wrappers (captioning, classification, text-to-image)
+- `src/analysis/` — analysis modules (style, emotion, composition, critique)
+- `src/generation/prompt_builder.py` — builds prompts for generation
+- `frontend/` — React + Vite frontend
+
+## Testing
+- `test_caption.py` — quick script used to validate image captioning fallback
+- `test_env.py` — prints/checks required environment variables
+
+Run tests (simple examples):
 
 ```powershell
-npm run dev
+python test_caption.py
+python test_env.py
 ```
 
-## Step 5 - API Contract To Use In React
+## Development Notes & Recommendations
+- Use the project virtual environment to avoid ModuleNotFoundError.
+- Hugging Face inference endpoints can change; a fallback strategy (classification labels) is implemented in `hf_client.py`.
+- For production: replace custom token generation with a standard JWT provider, enable HTTPS, add rate limiting, and secure the static file serving.
 
-`POST /api/v1/workflows/full-analysis`
+## Contributing
+If you want to contribute:
 
-Form fields:
-- `image` (optional file)
-- `description` (optional string)
-- `persona` (string)
-- `stylization`, `drama`, `texture`, `warmth` (0.0 to 1.0)
-- `session_id` (optional string)
+1. Fork the repository and create a new branch
+2. Implement changes and add tests where applicable
+3. Open a pull request describing the change
 
-Response keys:
-- `session_id`
-- `caption`
-- `analysis.style`
-- `analysis.emotion`
-- `analysis.composition`
-- `critique`
-- `generation.positive_prompt`
-- `generation.negative_prompt`
-- `generation.edit_suggestion`
-- `generation.generated_image_url`
+## License
+This repository does not currently include an explicit license file. Add a license (e.g., MIT) if you intend to open-source the project.
 
-## Step 6 - Advanced Features Queue
+## Acknowledgements
+- Uses Hugging Face inference APIs and community models for captioning and generation.
 
-1. Persona critics UI with presets and custom persona text.
-2. Prompt sliders and live prompt preview.
-3. Multi-image comparison endpoint and board view.
-4. Session timeline with progress deltas.
-5. Export report as PDF.
+If you'd like, I can also:
+- add a short `Getting Started` GIF and sample screenshots in `assets/`
+- add a LICENSE file and CI workflows for linting and tests
 
-## Implemented Now
-
-The following are now implemented:
-
-1. Login/Register authentication (JWT-like bearer token):
-	- `POST /api/v1/auth/register`
-	- `POST /api/v1/auth/login`
-	- `GET /api/v1/auth/me`
-2. Protected workflows and session endpoints (auth required).
-3. Multi-image comparison workflow:
-	- `POST /api/v1/workflows/compare-analysis` (2 to 4 images)
-4. Session report export:
-	- `GET /api/v1/sessions/{session_id}/export` (markdown download)
-5. Frontend login page, compare mode toggle, export report button, and improved responsive breakpoints.
-
-## Quick Test Flow
-
-1. Start backend:
-
-```powershell
-python -m uvicorn api_server:app --reload --host 127.0.0.1 --port 8000
-```
-
-2. Start frontend from root:
-
-```powershell
-npm run dev
-```
-
-3. In UI:
-	- Register user
-	- Login
-	- Run single analysis
-	- Switch to compare mode and upload 2 images
-	- Export report from active session
-
-## Notes
-
-- Existing Gradio app remains available in `app.py`.
-- New API path for migration starts in `api_server.py`.
