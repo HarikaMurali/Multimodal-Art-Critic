@@ -2,3 +2,5 @@ gradio
 python-dotenv
 huggingface_hub
 Pillow
+fastapi
+uvicorn
